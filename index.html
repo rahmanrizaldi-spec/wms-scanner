@@ -200,6 +200,7 @@
   const params = new URLSearchParams(window.location.search);
   const target = params.get('target');
   const callback = params.get('callback');
+  const serial = params.get('serial') || '';
 
   const targetLabel = document.getElementById('targetLabel');
   const statusEl = document.getElementById('status');
@@ -267,6 +268,10 @@
     returnUrl.searchParams.set('page', 'mobile_racking');
     returnUrl.searchParams.set('scan', cleanValue);
     returnUrl.searchParams.set('target', target);
+    // Saat scan lokasi, bawa kembali serial pallet yang sudah divalidasi.
+    if (target === 'location' && serial) {
+      returnUrl.searchParams.set('serial', serial);
+    }
 
     setTimeout(function () {
       window.location.href = returnUrl.toString();
