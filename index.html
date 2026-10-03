@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#111827">
+  <title>WMS Scanner</title>
+
+  <!-- Scanner engine: QR + common 1D/2D barcodes -->
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      font-family: Arial, Helvetica, sans-serif;
+      background: #0f172a;
+      color: #fff;
+    }
+
+    body {
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 18px;
+    }
+
+    .app {
+      width: 100%;
+      max-width: 520px;
+      padding: 8px 0 24px;
+    }
+
+    .header {
+      text-align: center;
+      padding: 10px 8px 16px;
+    }
+
+    .logo {
+      width: 58px;
+      height: 58px;
+      margin: 0 auto 10px;
+      border-radius: 18px;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(135deg, #2563eb, #06b6d4);
+      box-shadow: 0 10px 30px rgba(0,0,0,.28);
+      font-size: 27px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 24px;
+      letter-spacing: .5px;
+    }
+
+    .subtitle {
+      margin: 6px 0 0;
+      color: #cbd5e1;
+      font-size: 13px;
+    }
+
+    .card {
+      background: rgba(255,255,255,.08);
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 22px;
+      padding: 16px;
+      box-shadow: 0 16px 45px rgba(0,0,0,.25);
+      backdrop-filter: blur(12px);
+    }
+
+    .target {
+      text-align: center;
+      margin-bottom: 12px;
+      font-size: 13px;
+      color: #cbd5e1;
+    }
+
+    .target strong {
+      color: #fff;
+      text-transform: uppercase;
+    }
+
+    #reader {
+      width: 100%;
+      overflow: hidden;
+      border-radius: 18px;
+      background: #000;
+    }
+
+    #reader video {
+      border-radius: 18px !important;
+    }
+
+    #reader__dashboard_section_csr button,
+    #reader__dashboard_section_swaplink {
+      font-size: 14px !important;
+    }
+
+    .status {
+      margin-top: 14px;
+      min-height: 22px;
+      text-align: center;
+      color: #cbd5e1;
+      font-size: 13px;
+    }
+
+    .result {
+      display: none;
+      margin-top: 14px;
+      padding: 14px;
+      border-radius: 14px;
+      background: rgba(34,197,94,.12);
+      border: 1px solid rgba(34,197,94,.35);
+      word-break: break-word;
+    }
+
+    .result-label {
+      color: #86efac;
+      font-size: 11px;
+      text-transform: uppercase;
+      margin-bottom: 5px;
+    }
+
+    .result-value {
+      font-size: 17px;
+      font-weight: 700;
+    }
+
+    .btn {
+      width: 100%;
+      margin-top: 12px;
+      min-height: 46px;
+      border: 0;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .btn-secondary {
+      background: #334155;
+      color: #fff;
+    }
+
+    .error {
+      color: #fecaca;
+      text-align: center;
+      line-height: 1.5;
+      padding: 10px;
+    }
+
+    .hint {
+      text-align: center;
+      color: #94a3b8;
+      font-size: 11px;
+      margin-top: 13px;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+
+<body>
+  <main class="app">
+    <header class="header">
+      <div class="logo">▣</div>
+      <h1>WMS Scanner</h1>
+      <div class="subtitle">Scan QR / Barcode untuk Racking</div>
+    </header>
+
+    <section class="card">
+      <div class="target">
+        Scan: <strong id="targetLabel">—</strong>
+      </div>
+
+      <div id="reader"></div>
+
+      <div id="status" class="status">Memulai kamera...</div>
+
+      <div id="result" class="result">
+        <div class="result-label">Hasil Scan</div>
+        <div id="resultValue" class="result-value"></div>
+      </div>
+
+      <button id="backBtn" class="btn btn-secondary" type="button" style="display:none;">
+        Kembali ke WMS
+      </button>
+
+      <div class="hint">
+        Izinkan akses kamera saat browser meminta permission.
+        Setelah barcode berhasil terbaca, hasil akan dikirim kembali ke WMS.
+      </div>
+    </section>
+  </main>
+
+<script>
+(function () {
+  const params = new URLSearchParams(window.location.search);
+  const target = params.get('target');
+  const callback = params.get('callback');
+
+  const targetLabel = document.getElementById('targetLabel');
+  const statusEl = document.getElementById('status');
+  const resultEl = document.getElementById('result');
+  const resultValueEl = document.getElementById('resultValue');
+  const backBtn = document.getElementById('backBtn');
+
+  let scanner = null;
+  let finished = false;
+
+  if (target === 'serial') {
+    targetLabel.textContent = 'Serial Number Pallet';
+  } else if (target === 'location') {
+    targetLabel.textContent = 'Lokasi Tujuan';
+  } else {
+    targetLabel.textContent = 'Tidak diketahui';
+  }
+
+  function setStatus(text) {
+    statusEl.textContent = text;
+  }
+
+  function showError(message) {
+    document.getElementById('reader').innerHTML =
+      '<div class="error">' + message + '</div>';
+    setStatus('');
+    backBtn.style.display = 'block';
+  }
+
+  function validCallbackUrl(url) {
+    try {
+      const u = new URL(url);
+      return u.protocol === 'https:' &&
+             u.hostname === 'script.google.com' &&
+             u.pathname.startsWith('/macros/s/');
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function returnToWms(value) {
+    if (finished) return;
+    finished = true;
+
+    const cleanValue = String(value || '').trim();
+    if (!cleanValue) {
+      finished = false;
+      return;
+    }
+
+    resultEl.style.display = 'block';
+    resultValueEl.textContent = cleanValue;
+    setStatus('Scan berhasil. Mengembalikan hasil ke WMS...');
+
+    if (!validCallbackUrl(callback)) {
+      setStatus('');
+      document.getElementById('reader').innerHTML =
+        '<div class="error">Callback WMS tidak valid.</div>';
+      backBtn.style.display = 'block';
+      finished = false;
+      return;
+    }
+
+    const returnUrl = new URL(callback);
+    returnUrl.searchParams.set('page', 'mobile_racking');
+    returnUrl.searchParams.set('scan', cleanValue);
+    returnUrl.searchParams.set('target', target);
+
+    setTimeout(function () {
+      window.location.href = returnUrl.toString();
+    }, 350);
+  }
+
+  function onScanSuccess(decodedText) {
+    if (finished) return;
+
+    try {
+      if (scanner) {
+        scanner.stop().catch(function () {});
+      }
+    } catch (e) {}
+
+    returnToWms(decodedText);
+  }
+
+  function onScanFailure() {
+    // Scan belum berhasil; tidak perlu menampilkan error berulang.
+  }
+
+  function startScanner() {
+    if (!target || (target !== 'serial' && target !== 'location')) {
+      showError('Target scanner tidak valid.');
+      return;
+    }
+
+    if (!callback || !validCallbackUrl(callback)) {
+      showError('URL kembali ke WMS tidak valid.');
+      return;
+    }
+
+    if (!window.Html5Qrcode) {
+      showError('Engine scanner gagal dimuat. Periksa koneksi internet lalu coba lagi.');
+      return;
+    }
+
+    scanner = new Html5Qrcode('reader');
+
+    const config = {
+      fps: 10,
+      qrbox: function (viewfinderWidth, viewfinderHeight) {
+        const size = Math.floor(Math.min(viewfinderWidth, viewfinderHeight) * 0.72);
+        return { width: Math.max(220, Math.min(size, 320)),
+                 height: Math.max(220, Math.min(size, 320)) };
+      },
+      aspectRatio: 1.0,
+      rememberLastUsedCamera: true
+    };
+
+    setStatus('Meminta izin kamera...');
+
+    scanner.start(
+      { facingMode: { exact: 'environment' } },
+      config,
+      onScanSuccess,
+      onScanFailure
+    ).then(function () {
+      setStatus('Arahkan kamera ke QR / Barcode.');
+    }).catch(function (firstError) {
+      // Beberapa perangkat tidak menerima facingMode exact.
+      try {
+        scanner.clear().catch(function () {});
+
+        scanner = new Html5Qrcode('reader');
+
+        scanner.start(
+          { facingMode: 'environment' },
+          config,
+          onScanSuccess,
+          onScanFailure
+        ).then(function () {
+          setStatus('Arahkan kamera ke QR / Barcode.');
+        }).catch(function (secondError) {
+          console.error(firstError);
+          console.error(secondError);
+          showError(
+            'Kamera tidak dapat dibuka.<br><br>' +
+            'Pastikan permission kamera di browser sudah diizinkan, ' +
+            'dan halaman dibuka melalui HTTPS.'
+          );
+        });
+      } catch (e) {
+        console.error(e);
+        showError('Kamera tidak dapat dibuka.');
+      }
+    });
+  }
+
+  backBtn.addEventListener('click', function () {
+    if (validCallbackUrl(callback)) {
+      const u = new URL(callback);
+      u.searchParams.set('page', 'mobile_racking');
+      window.location.href = u.toString();
+    } else {
+      history.back();
+    }
+  });
+
+  startScanner();
+})();
+</script>
+</body>
+</html>
