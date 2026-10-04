@@ -217,6 +217,8 @@
     targetLabel.textContent = 'Lokasi Tujuan';
   } else if (target === 'picking') {
     targetLabel.textContent = 'Picking List (PL)';
+  } else if (target === 'rack') {
+    targetLabel.textContent = 'Cek Rak / Lokasi';
   } else {
     targetLabel.textContent = 'Tidak diketahui';
   }
@@ -267,7 +269,11 @@
     }
 
     const returnUrl = new URL(callback);
-    returnUrl.searchParams.set('page', target === 'picking' ? 'mobile_picking' : 'mobile_racking');
+    returnUrl.searchParams.set(
+      'page',
+      target === 'picking' ? 'mobile_picking' :
+      target === 'rack' ? 'mobile_stock' : 'mobile_racking'
+    );
     returnUrl.searchParams.set('scan', cleanValue);
     returnUrl.searchParams.set('target', target);
     // Saat scan lokasi, bawa kembali serial pallet yang sudah divalidasi.
@@ -297,7 +303,7 @@
   }
 
   function startScanner() {
-    if (!target || (target !== 'serial' && target !== 'location' && target !== 'picking')) {
+    if (!target || (target !== 'serial' && target !== 'location' && target !== 'picking' && target !== 'rack')) {
       showError('Target scanner tidak valid.');
       return;
     }
