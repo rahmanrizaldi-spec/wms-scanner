@@ -189,8 +189,9 @@
       </button>
 
       <div class="hint">
-        Izinkan akses kamera saat browser meminta permission.
-        Setelah barcode berhasil terbaca, hasil akan dikirim kembali ke WMS.
+        Izinkan akses kamera saat browser meminta permission pertama kali.
+        Setelah izin tersimpan oleh browser, kamera dapat digunakan kembali tanpa
+        meminta izin dari aplikasi ini. Setelah barcode berhasil terbaca, hasil akan dikirim kembali ke WMS.
       </div>
     </section>
   </main>
@@ -323,42 +324,26 @@
       rememberLastUsedCamera: true
     };
 
-    setStatus('Meminta izin kamera...');
+    // Gunakan constraint environment biasa agar Safari/iPhone tidak
+    // mengalami percobaan pembukaan kamera dua kali karena "exact".
+    // Permission kamera tetap dikendalikan oleh browser.
+    setStatus('Membuka kamera...');
 
     scanner.start(
-      { facingMode: { exact: 'environment' } },
+      { facingMode: 'environment' },
       config,
       onScanSuccess,
       onScanFailure
     ).then(function () {
       setStatus('Arahkan kamera ke QR / Barcode.');
-    }).catch(function (firstError) {
-      // Beberapa perangkat tidak menerima facingMode exact.
-      try {
-        scanner.clear().catch(function () {});
-
-        scanner = new Html5Qrcode('reader');
-
-        scanner.start(
-          { facingMode: 'environment' },
-          config,
-          onScanSuccess,
-          onScanFailure
-        ).then(function () {
-          setStatus('Arahkan kamera ke QR / Barcode.');
-        }).catch(function (secondError) {
-          console.error(firstError);
-          console.error(secondError);
-          showError(
-            'Kamera tidak dapat dibuka.<br><br>' +
-            'Pastikan permission kamera di browser sudah diizinkan, ' +
-            'dan halaman dibuka melalui HTTPS.'
-          );
-        });
-      } catch (e) {
-        console.error(e);
-        showError('Kamera tidak dapat dibuka.');
-      }
+    }).catch(function (error) {
+      console.error(error);
+      showError(
+        'Kamera tidak dapat dibuka.<br><br>' +
+        'Jika ini pertama kali menggunakan scanner, pilih "Izinkan" ' +
+        'saat browser meminta akses kamera. Setelah izin tersimpan oleh ' +
+        'Safari, scanner tidak perlu meminta izin lagi.'
+      );
     });
   }
 
