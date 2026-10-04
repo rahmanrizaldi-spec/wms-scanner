@@ -219,6 +219,8 @@
     targetLabel.textContent = 'Picking List (PL)';
   } else if (target === 'rack') {
     targetLabel.textContent = 'Cek Rak / Lokasi';
+  } else if (target === 'adjustment') {
+    targetLabel.textContent = 'Adjustment - Serial / Lokasi';
   } else {
     targetLabel.textContent = 'Tidak diketahui';
   }
@@ -273,6 +275,7 @@
       'page',
       target === 'picking' ? 'mobile_picking' :
       (target === 'rack' || target === 'serial') ? 'mobile_stock' :
+      target === 'adjustment' ? 'mobile_adjustment' :
       'mobile_racking'
     );
     returnUrl.searchParams.set('scan', cleanValue);
@@ -304,7 +307,7 @@
   }
 
   function startScanner() {
-    if (!target || (target !== 'serial' && target !== 'location' && target !== 'picking' && target !== 'rack')) {
+    if (!target || (target !== 'serial' && target !== 'location' && target !== 'picking' && target !== 'rack' && target !== 'adjustment')) {
       showError('Target scanner tidak valid.');
       return;
     }
@@ -325,21 +328,15 @@
       fps: 10,
       qrbox: function (viewfinderWidth, viewfinderHeight) {
         const size = Math.floor(Math.min(viewfinderWidth, viewfinderHeight) * 0.72);
-        return {
-          width: Math.max(220, Math.min(size, 320)),
-          height: Math.max(220, Math.min(size, 320))
-        };
+        return { width: Math.max(220, Math.min(size, 320)),
+                 height: Math.max(220, Math.min(size, 320)) };
       },
       aspectRatio: 1.0,
       rememberLastUsedCamera: true
     };
 
-    setStatus('Memulai kamera...');
+    setStatus('Meminta izin kamera...');
 
-    // Gunakan alur yang sama dengan scanner GitHub yang sebelumnya sudah
-    // terbukti bekerja di iPhone. Jangan melakukan getUserMedia manual
-    // terlebih dahulu karena pada Safari/iOS hal tersebut dapat membuat
-    // html5-qrcode gagal mengambil alih kamera.
     scanner.start(
       { facingMode: { exact: 'environment' } },
       config,
@@ -348,11 +345,12 @@
     ).then(function () {
       setStatus('Arahkan kamera ke QR / Barcode.');
     }).catch(function (firstError) {
-      // Fallback untuk perangkat/browser yang tidak menerima facingMode exact.
+      // Beberapa perangkat tidak menerima facingMode exact.
       try {
         scanner.clear().catch(function () {});
 
         scanner = new Html5Qrcode('reader');
+
         scanner.start(
           { facingMode: 'environment' },
           config,
@@ -361,8 +359,8 @@
         ).then(function () {
           setStatus('Arahkan kamera ke QR / Barcode.');
         }).catch(function (secondError) {
-          console.error('Scanner error 1:', firstError);
-          console.error('Scanner error 2:', secondError);
+          console.error(firstError);
+          console.error(secondError);
           showError(
             'Kamera tidak dapat dibuka.<br><br>' +
             'Pastikan permission kamera di browser sudah diizinkan, ' +
@@ -370,7 +368,7 @@
           );
         });
       } catch (e) {
-        console.error('Scanner fallback error:', e);
+        console.error(e);
         showError('Kamera tidak dapat dibuka.');
       }
     });
@@ -382,7 +380,8 @@
       u.searchParams.set(
         'page',
         (target === 'rack' || target === 'serial') ? 'mobile_stock' :
-        target === 'picking' ? 'mobile_picking' : 'mobile_racking'
+        target === 'picking' ? 'mobile_picking' :
+        target === 'adjustment' ? 'mobile_adjustment' : 'mobile_racking'
       );
       window.location.href = u.toString();
     } else {
