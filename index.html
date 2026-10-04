@@ -303,7 +303,7 @@
     // Scan belum berhasil; tidak perlu menampilkan error berulang.
   }
 
-  async function startScanner() {
+  function startScanner() {
     if (!target || (target !== 'serial' && target !== 'location' && target !== 'picking' && target !== 'rack')) {
       showError('Target scanner tidak valid.');
       return;
@@ -319,87 +319,61 @@
       return;
     }
 
-    if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      showError(
-        'Kamera membutuhkan koneksi HTTPS dan browser yang mendukung akses kamera.<br><br>' +
-        'Buka scanner melalui alamat HTTPS.'
-      );
-      return;
-    }
+    scanner = new Html5Qrcode('reader');
 
     const config = {
-      fps: 8,
+      fps: 10,
       qrbox: function (viewfinderWidth, viewfinderHeight) {
-        const size = Math.floor(Math.min(viewfinderWidth, viewfinderHeight) * 0.68);
+        const size = Math.floor(Math.min(viewfinderWidth, viewfinderHeight) * 0.72);
         return {
-          width: Math.max(180, Math.min(size, 300)),
-          height: Math.max(180, Math.min(size, 300))
+          width: Math.max(220, Math.min(size, 320)),
+          height: Math.max(220, Math.min(size, 320))
         };
       },
       aspectRatio: 1.0,
-      disableFlip: false
+      rememberLastUsedCamera: true
     };
 
-    setStatus('Meminta izin kamera...');
+    setStatus('Memulai kamera...');
 
-    let permissionStream = null;
-    try {
-      // iPhone/Safari lebih stabil jika permission kamera diminta lebih dulu.
-      // Setelah permission didapat, stream ini langsung dihentikan sebelum
-      // html5-qrcode mengambil alih kamera.
-      permissionStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'environment' } },
-        audio: false
-      });
-
-      permissionStream.getTracks().forEach(function (track) { track.stop(); });
-      permissionStream = null;
-
-      // Beri waktu singkat agar kamera benar-benar dilepas di iOS.
-      await new Promise(function (resolve) { setTimeout(resolve, 180); });
-
-      const cameras = await Html5Qrcode.getCameras();
-      if (!cameras || !cameras.length) {
-        throw new Error('Tidak ada kamera yang tersedia.');
-      }
-
-      // Prioritaskan kamera belakang berdasarkan label.
-      let cameraId = cameras[0].id;
-      const backCamera = cameras.find(function (cam) {
-        const label = String(cam.label || '').toLowerCase();
-        return /back|rear|environment|belakang/.test(label);
-      });
-      if (backCamera) cameraId = backCamera.id;
-
-      scanner = new Html5Qrcode('reader');
-      await scanner.start(cameraId, config, onScanSuccess, onScanFailure);
+    // Gunakan alur yang sama dengan scanner GitHub yang sebelumnya sudah
+    // terbukti bekerja di iPhone. Jangan melakukan getUserMedia manual
+    // terlebih dahulu karena pada Safari/iOS hal tersebut dapat membuat
+    // html5-qrcode gagal mengambil alih kamera.
+    scanner.start(
+      { facingMode: { exact: 'environment' } },
+      config,
+      onScanSuccess,
+      onScanFailure
+    ).then(function () {
       setStatus('Arahkan kamera ke QR / Barcode.');
+    }).catch(function (firstError) {
+      // Fallback untuk perangkat/browser yang tidak menerima facingMode exact.
+      try {
+        scanner.clear().catch(function () {});
 
-    } catch (err) {
-      if (permissionStream) {
-        permissionStream.getTracks().forEach(function (track) { track.stop(); });
+        scanner = new Html5Qrcode('reader');
+        scanner.start(
+          { facingMode: 'environment' },
+          config,
+          onScanSuccess,
+          onScanFailure
+        ).then(function () {
+          setStatus('Arahkan kamera ke QR / Barcode.');
+        }).catch(function (secondError) {
+          console.error('Scanner error 1:', firstError);
+          console.error('Scanner error 2:', secondError);
+          showError(
+            'Kamera tidak dapat dibuka.<br><br>' +
+            'Pastikan permission kamera di browser sudah diizinkan, ' +
+            'dan halaman dibuka melalui HTTPS.'
+          );
+        });
+      } catch (e) {
+        console.error('Scanner fallback error:', e);
+        showError('Kamera tidak dapat dibuka.');
       }
-
-      console.error('Scanner start error:', err);
-
-      let message = 'Kamera tidak dapat dibuka.';
-      const name = String(err && err.name || '');
-
-      if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
-        message = 'Akses kamera ditolak. Izinkan Camera untuk website scanner ini di pengaturan browser, lalu buka scanner kembali.';
-      } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
-        message = 'Kamera tidak ditemukan pada perangkat.';
-      } else if (name === 'NotReadableError' || name === 'TrackStartError') {
-        message = 'Kamera sedang digunakan aplikasi/tab lain. Tutup penggunaan kamera lain lalu coba lagi.';
-      } else if (name === 'OverconstrainedError') {
-        message = 'Kamera belakang tidak tersedia. Coba buka kembali scanner.';
-      }
-
-      showError(
-        message + '<br><br>' +
-        '<small>Jika permission sudah diizinkan tetapi tetap gagal, tutup tab scanner lalu buka kembali dari WMS.</small>'
-      );
-    }
+    });
   }
 
   backBtn.addEventListener('click', function () {
