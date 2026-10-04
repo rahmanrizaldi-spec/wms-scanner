@@ -167,7 +167,7 @@
     <header class="header">
       <div class="logo">▣</div>
       <h1>WMS Scanner</h1>
-      <div class="subtitle">Scan QR / Barcode untuk Racking</div>
+      <div class="subtitle">Scan QR / Barcode untuk WMS</div>
     </header>
 
     <section class="card">
@@ -189,9 +189,8 @@
       </button>
 
       <div class="hint">
-        Izinkan akses kamera saat browser meminta permission pertama kali.
-        Setelah izin tersimpan oleh browser, kamera dapat digunakan kembali tanpa
-        meminta izin dari aplikasi ini. Setelah barcode berhasil terbaca, hasil akan dikirim kembali ke WMS.
+        Izinkan akses kamera saat browser meminta permission.
+        Setelah barcode berhasil terbaca, hasil akan dikirim kembali ke WMS.
       </div>
     </section>
   </main>
@@ -216,6 +215,8 @@
     targetLabel.textContent = 'Serial Number Pallet';
   } else if (target === 'location') {
     targetLabel.textContent = 'Lokasi Tujuan';
+  } else if (target === 'picking') {
+    targetLabel.textContent = 'Picking List (PL)';
   } else {
     targetLabel.textContent = 'Tidak diketahui';
   }
@@ -266,7 +267,7 @@
     }
 
     const returnUrl = new URL(callback);
-    returnUrl.searchParams.set('page', 'mobile_racking');
+    returnUrl.searchParams.set('page', target === 'picking' ? 'mobile_picking' : 'mobile_racking');
     returnUrl.searchParams.set('scan', cleanValue);
     returnUrl.searchParams.set('target', target);
     // Saat scan lokasi, bawa kembali serial pallet yang sudah divalidasi.
@@ -296,7 +297,7 @@
   }
 
   function startScanner() {
-    if (!target || (target !== 'serial' && target !== 'location')) {
+    if (!target || (target !== 'serial' && target !== 'location' && target !== 'picking')) {
       showError('Target scanner tidak valid.');
       return;
     }
@@ -324,26 +325,42 @@
       rememberLastUsedCamera: true
     };
 
-    // Gunakan constraint environment biasa agar Safari/iPhone tidak
-    // mengalami percobaan pembukaan kamera dua kali karena "exact".
-    // Permission kamera tetap dikendalikan oleh browser.
-    setStatus('Membuka kamera...');
+    setStatus('Meminta izin kamera...');
 
     scanner.start(
-      { facingMode: 'environment' },
+      { facingMode: { exact: 'environment' } },
       config,
       onScanSuccess,
       onScanFailure
     ).then(function () {
       setStatus('Arahkan kamera ke QR / Barcode.');
-    }).catch(function (error) {
-      console.error(error);
-      showError(
-        'Kamera tidak dapat dibuka.<br><br>' +
-        'Jika ini pertama kali menggunakan scanner, pilih "Izinkan" ' +
-        'saat browser meminta akses kamera. Setelah izin tersimpan oleh ' +
-        'Safari, scanner tidak perlu meminta izin lagi.'
-      );
+    }).catch(function (firstError) {
+      // Beberapa perangkat tidak menerima facingMode exact.
+      try {
+        scanner.clear().catch(function () {});
+
+        scanner = new Html5Qrcode('reader');
+
+        scanner.start(
+          { facingMode: 'environment' },
+          config,
+          onScanSuccess,
+          onScanFailure
+        ).then(function () {
+          setStatus('Arahkan kamera ke QR / Barcode.');
+        }).catch(function (secondError) {
+          console.error(firstError);
+          console.error(secondError);
+          showError(
+            'Kamera tidak dapat dibuka.<br><br>' +
+            'Pastikan permission kamera di browser sudah diizinkan, ' +
+            'dan halaman dibuka melalui HTTPS.'
+          );
+        });
+      } catch (e) {
+        console.error(e);
+        showError('Kamera tidak dapat dibuka.');
+      }
     });
   }
 
