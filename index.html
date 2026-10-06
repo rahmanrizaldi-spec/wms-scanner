@@ -270,15 +270,14 @@
       return;
     }
 
+    // Jangan menentukan halaman kembali berdasarkan target scanner.
+    // Halaman asal sudah tersimpan di callback:
+    // Racking -> page=mobile_racking
+    // Stock   -> page=mobile_stock
+    // Picking -> page=mobile_picking
+    // Adjustment -> page=mobile_adjustment
+    // Dengan begitu target=serial tidak akan salah masuk ke Stock.
     const returnUrl = new URL(callback);
-    returnUrl.searchParams.set(
-      'page',
-      target === 'picking' ? 'mobile_picking' :
-      target === 'rack' ? 'mobile_stock' :
-      target === 'serial' ? 'mobile_racking' :
-      target === 'adjustment' ? 'mobile_adjustment' :
-      'mobile_racking'
-    );
     returnUrl.searchParams.set('scan', cleanValue);
     returnUrl.searchParams.set('target', target);
     // Saat scan lokasi, bawa kembali serial pallet yang sudah divalidasi.
@@ -377,13 +376,9 @@
 
   backBtn.addEventListener('click', function () {
     if (validCallbackUrl(callback)) {
+      // Kembali persis ke halaman asal yang diberikan oleh callback.
+      // Jangan menentukan halaman berdasarkan target scanner.
       const u = new URL(callback);
-      u.searchParams.set(
-        'page',
-        (target === 'rack' || target === 'serial') ? 'mobile_stock' :
-        target === 'picking' ? 'mobile_picking' :
-        target === 'adjustment' ? 'mobile_adjustment' : 'mobile_racking'
-      );
       window.location.href = u.toString();
     } else {
       history.back();
