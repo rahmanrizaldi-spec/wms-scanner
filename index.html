@@ -274,7 +274,8 @@
     returnUrl.searchParams.set(
       'page',
       target === 'picking' ? 'mobile_picking' :
-      (target === 'rack' || target === 'serial') ? 'mobile_stock' :
+      target === 'rack' ? 'mobile_stock' :
+      target === 'serial' ? 'mobile_racking' :
       target === 'adjustment' ? 'mobile_adjustment' :
       'mobile_racking'
     );
